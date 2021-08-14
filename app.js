@@ -45,7 +45,6 @@ app.use("/cors-proxy", (req, res, next) => {
             // filter out headers like Content-Encoding that throw off the client
             const headers = [...resp.headers.entries()].filter(entry => !["content-encoding"].includes(entry[0].toLowerCase()));
 
-            console.log(headers);
             res.status(resp.status).set(Object.fromEntries(headers));
             resp.body.pipe(res);
 
