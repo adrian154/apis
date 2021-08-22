@@ -24,6 +24,8 @@ app.use((req, res, next) => {
 
 });
 
+app.use("/static", express.static("./static"));
+
 app.use("/cors-proxy", (req, res, next) => {
     if(typeof req.query.url == "string") {
         
@@ -57,6 +59,9 @@ app.use("/cors-proxy", (req, res, next) => {
 
 // register various routes
 app.get("/", require("./routes/root.js"));
+app.get("/ip", require("./routes/ip.js"));
+app.get("/headers", require("./routes/headers.js"));
+app.get("/embed", require("./routes/embed.js"));
 app.get("/mc/ping-server", require("./routes/server-ping.js"));
 
 // error handler routes
