@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
                 res.json(resp);
                 cacheValue(key, resp);
             } catch(error) {
-                const resp = {error: error.message};
+                const resp = {error};
                 res.status(500).json(resp);
                 cacheValue(key, resp);
             }
