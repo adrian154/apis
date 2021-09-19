@@ -13,11 +13,16 @@ const FILTERED_RESPONSE_HEADERS = [
 
 module.exports = (req, res, next) => {
 
-    res.setHeader("Access-Control-Allow-Origin", config.corsProxyOrigins);
-
     const url = req.query.url || req.header("X-Proxy-URL");
     if(!url) {
         return res.sendStatus(400);
+    }
+
+    res.header("Access-Control-Allow-Origin", config.corsProxyOrigins);
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
+    res.header("Access-Control-Allow-Headers", req.header("Access-Control-Request-Headers"));
+    if(req.method === "OPTIONS") {
+        res.sendStatus(204);
     }
 
     const chunks = [];
