@@ -1,6 +1,4 @@
-const bodyParser = require("body-parser");
 const config = require("./config.json");
-const fetch = require("node-fetch");
 const express = require("express");
 
 // create app and set up middlewares
@@ -14,48 +12,12 @@ app.disable("x-powered-by");
 app.use(express.json());
 
 app.use((req, res, next) => {
-
-    // log access
-    console.log(`${req.ip}: ${req.path}`);    
-    
-    // attach various headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     next();
-
 });
 
 app.use("/static", express.static("./static"));
-
-app.use("/cors-proxy", (req, res, next) => {
-    if(typeof req.query.url == "string") {
-        
-        const url = new URL(req.query.url);
-        const chunks = [];
-        req.on("data", chunk => {
-            chunks.push(chuk);
-        });
-
-        req.on("close", async () => {
-            
-            const data = chunks.length > 0 ? (typeof chunks[0] === "string" ? chunks.join("") : Buffer.concat(chunks)) : undefined;
-            const resp = await fetch(req.query.url, {
-                method: req.method,
-                headers: {...req.headers, host: url.hostname},
-                body: data
-            });
-            
-            // filter out headers like Content-Encoding that throw off the client
-            const headers = [...resp.headers.entries()].filter(entry => !["content-encoding"].includes(entry[0].toLowerCase()));
-
-            res.status(resp.status).set(Object.fromEntries(headers));
-            resp.body.pipe(res);
-
-        });
-
-    } else {
-        res.sendStatus(400);
-    }
-});
+app.use("/cors-proxy", require("./routes/cors-proxy.js"));
 
 // register various routes
 app.get("/", require("./routes/root.js"));
