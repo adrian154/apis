@@ -1,4 +1,4 @@
-const bodyParser = require("body-parser");
+const config = require("./config.json");
 const fetch = require("node-fetch");
 
 const FILTERED_REQUEST_HEADERS = [
@@ -12,6 +12,8 @@ const FILTERED_RESPONSE_HEADERS = [
 ];
 
 module.exports = (req, res, next) => {
+
+    res.setHeader("Access-Control-Allow-Origin", config.corsProxyOrigins);
 
     const url = req.query.url || req.header("X-Proxy-URL");
     if(!url) {
@@ -38,6 +40,7 @@ module.exports = (req, res, next) => {
             const headers = [...resp.headers.entries()].filter(entry => !FILTERED_RESPONSE_HEADERS.includes(entry[0].toLowerCase()));
             res.status(resp.status).set(Object.fromEntries(headers));
             resp.body.pipe(res);
+
         } catch(error) {
             return res.sendStatus(500);
         }
