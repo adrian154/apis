@@ -1,3 +1,7 @@
 module.exports = (req, res) => {
-    res.json(req.headers);
+    if(req.query.h) {
+        res.send(req.header(req.query.h));
+    } else {
+        res.json(req.headers);
+    }
 };

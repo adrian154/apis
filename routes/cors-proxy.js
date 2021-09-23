@@ -21,8 +21,18 @@ module.exports = (req, res, next) => {
     res.header("Access-Control-Allow-Origin", config.corsProxyOrigins);
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
     res.header("Access-Control-Allow-Headers", req.header("Access-Control-Request-Headers"));
+
+    // other headers
+    for(const key in req.query) {
+        if(key !== "url") {
+            console.log(key);
+            res.header(key, req.query[key]);
+        }
+    }
+
+    // preflights
     if(req.method === "OPTIONS") {
-        res.sendStatus(204);
+        return res.sendStatus(204);
     }
 
     const chunks = [];
