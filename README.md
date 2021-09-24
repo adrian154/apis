@@ -1,6 +1,6 @@
 # apis
 
-A collection of random APIs. I mainly add methods as I need them, but PRs are welcome.
+A collection of random APIs. I mainly add methods as I need them, but PRs are welcome. All these endpoints are publicly available at https://apis.bithole.dev
 
 # /ip
 
