@@ -25,7 +25,6 @@ module.exports = (req, res, next) => {
     // other headers
     for(const key in req.query) {
         if(key !== "url") {
-            console.log(key);
             res.header(key, req.query[key]);
         }
     }

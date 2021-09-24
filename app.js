@@ -32,6 +32,7 @@ app.use((req, res, next) => {
 });
 
 app.use((err, req, res, next) => {
+    console.error(err);
     res.status(500).send("Uh oh, something really bad happened.");
 });
 

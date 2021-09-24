@@ -1,4 +1,3 @@
-const { response } = require("express");
 const MC = require("node-mc-api");
 
 // awful cache
