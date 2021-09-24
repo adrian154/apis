@@ -48,4 +48,4 @@ A collection of random APIs. I mainly add methods as I need them, but PRs are we
 * `url`: (string) URL of request to proxy
 * Additional parameters are sent as headers in the response, overriding the header with the original request if present. This can be used to set custom headers on arbitrary requests.
 
-**Response:** The status code and data returned by the resource located at the request URL, a 400 error if the `url` field was invalid, or a 500 error if an error occurred while making the request.
+**Response:** The status code and data returned by the resource located at the request URL, a 400 error if the `url` field was invalid, or a 500 error if an error occurred while making the request. By default, the Access-Control-Allow-Origin header is set to `*`.
