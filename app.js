@@ -22,6 +22,7 @@ app.use("/cors-proxy", require("./routes/cors-proxy.js"));
 // register various routes
 app.get("/", require("./routes/root.js"));
 app.get("/ip", require("./routes/ip.js"));
+app.get("/dns", require("./routes/dns-lookup.js"));
 app.get("/headers", require("./routes/headers.js"));
 app.get("/embed", require("./routes/embed.js"));
 app.get("/mc/ping-server", require("./routes/server-ping.js"));

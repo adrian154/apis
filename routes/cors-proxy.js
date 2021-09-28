@@ -2,13 +2,16 @@ const config = require("../config.json");
 const fetch = require("node-fetch");
 
 const FILTERED_REQUEST_HEADERS = [
-    "host",
-    "x-proxy-url"
+    "host", // host header will always be apis.bithole.dev
+    "x-proxy-url" // no need to expose this 
 ];
 
 const FILTERED_RESPONSE_HEADERS = [
-    "content-encoding",
-    "content-length",
+    "content-encoding", // let fetch handle this
+    "content-length", // (ditto)
+    "access-control-allow-origin", // block CORS headers for obvious reasons
+    "access-control-allow-methods",
+    "access-control-allow-headers"
 ];
 
 module.exports = (req, res, next) => {
@@ -21,13 +24,6 @@ module.exports = (req, res, next) => {
     res.header("Access-Control-Allow-Origin", config.corsProxyOrigins);
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
     res.header("Access-Control-Allow-Headers", req.header("Access-Control-Request-Headers"));
-
-    // other headers
-    for(const key in req.query) {
-        if(key !== "url") {
-            res.header(key, req.query[key]);
-        }
-    }
 
     // preflights
     if(req.method === "OPTIONS") {
@@ -53,6 +49,14 @@ module.exports = (req, res, next) => {
             
             const headers = [...resp.headers.entries()].filter(entry => !FILTERED_RESPONSE_HEADERS.includes(entry[0].toLowerCase()));
             res.status(resp.status).set(Object.fromEntries(headers));
+
+            // attach header overrides later
+            for(const key in req.query) {
+                if(key !== "url") {
+                    res.header(key, req.query[key]);
+                }
+            }
+
             resp.body.pipe(res);
 
         } catch(error) {
