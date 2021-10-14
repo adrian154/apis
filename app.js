@@ -1,8 +1,10 @@
 const config = require("./config.json");
 const express = require("express");
+const Cache = require("./cache.js");
 
 // create app and set up middlewares
 const app = express();
+const pingCache = new Cache(60 * 1000, 1024);
 
 if(config.proxy) {
     app.enable("trust proxy");
@@ -13,6 +15,7 @@ app.use(express.json());
 
 app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
+    req.pingCache = pingCache;
     next();
 });
 
@@ -26,6 +29,7 @@ app.get("/dns", require("./routes/dns-lookup.js"));
 app.get("/headers", require("./routes/headers.js"));
 app.get("/embed", require("./routes/embed.js"));
 app.get("/mc/ping-server", require("./routes/server-ping.js"));
+app.get("/mc/server-icon", require("./routes/server-icon.js"));
 
 // error handler routes
 app.use((req, res, next) => {
