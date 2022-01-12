@@ -13,8 +13,8 @@ const RESPONSE_CODE = {
 const FLAG = {
     RECURSION_AVAILABLE: 0x80,
     RECURSIVE_QUERY: 0x100,
-    MESSAGE_TRUNCATED: 0x400,
-    AUTHORITATIVE: 0x800,
+    MESSAGE_TRUNCATED: 0x200,
+    AUTHORITATIVE: 0x400,
     RESPONSE: 0x8000
 };
 
@@ -45,11 +45,13 @@ class DNSBuilder extends BufferBuilder {
             throw new Error("String length exceeds maximum value that prefix can contain");
         }
         this.writeUInt8(buf.length).writeBuffer(buf);
+        return this;
     }
 
     // WARNING; if you use this function with things other than an FQDN disaster may result
     writeDomainName(domain) {
         domain.split(".").forEach(label => this.writeString(label));
+        return this;
     }
 
 }
@@ -76,19 +78,20 @@ class DNSReader extends BufferReader {
             // if the top 2 bits of the length are set, it's a pointer to another label
             const length = this.readUInt8();
             if(length & 0b11000000) {
-                this.jump(this.readUInt16BE() & 0x3fff); // extract pointer (bottom 14 bits)
-                labels.push(this.readString());
+                const ptr = length << 8 | this.readUInt8();
+                this.jump(ptr & 0x3fff); // extract pointer (bottom 14 bits)
+                labels.push(this.readDomainName());
                 this.return();
                 break;
             } 
 
-            reader.push(label = this.readString());
+            labels.push(label = this.readBuffer(length).toString("utf-8"));
 
         } while(label.length > 0); // label of length zero (single 0 byte) indicates end of domain name
     
         // output FQDN
         return labels.join(".");
-    
+
     }
 
     readIPv4() {
@@ -169,6 +172,7 @@ const RDATA = {
                     target: reader.readDomainName()
                 };
 
+            // unsupported resource record
             default: return null;
         
         }
@@ -178,49 +182,82 @@ const RDATA = {
 const ResourceRecord = {
     read: reader => {
         const result = {};
-        result.domain = readDomainName(reader);
+        result.domain = reader.readDomainName();
         result.type = reader.readUInt16BE();
         result.class = reader.readUInt16BE();
-        result.ttl = readUInt32BE();
-        result.rdata = readRDATA(reader, result.type, result.class);
-        return reader;
+        result.ttl = reader.readUInt32BE();
+        const length = reader.readUInt16BE();
+        const end = reader.position + length;
+        result.rdata = RDATA.read(reader, result.type, result.class);
+        reader.seek(end);
+        return result;
     }
 };
 
 const Question = {
-    write: () => {}
+    write: (builder, question) => builder.writeDomainName(question.domain).writeUInt16BE(question.type).writeUInt16BE(question.class),
+    read: reader => ({
+        domain: reader.readDomainName(),
+        type: reader.readUInt16BE(),
+        class: reader.readUInt16BE()
+    })
 };
 
 const DNSMessage = {
-
-};
-
-const buildQuestion = question => {
-    const builder = new BufferBuilder();
-    builder.writeBuffer(writeDomainName(builder, question.domain))
-           .writeUInt16BE(question.queryType)
-           .writeUInt16BE(question.class);
-    return builder.build();
-};
-
-const readDNSMessage = reader => {
+    read: reader => {
     
-    const result = {};
+        const result = {};
+        
+        // read header
+        result.id = reader.readUInt16BE();
+        const flags = reader.readUInt16BE();
+        result.flags = {
+            recursionAvailable: flags & FLAG.RECURSION_AVAILABLE,
+            recursiveQuery: flags & FLAG.RECURSIVE_QUERY,
+            truncated: flags & FLAG.MESSAGE_TRUNCATED,
+            authoritative: flags & FLAG.AUTHORITATIVE,
+            isResponse: flags & FLAG.RESPONSE
+        };
     
-    // read header
-    result.id = reader.readUInt16BE();
-    const flags = reader.readUInt16BE();
-    result.flags = {
-        recursionAvailable: flags & FLAG.RECURSION_AVAILABLE,
-        recursiveQuery: flags & FLAG.RECURSIVE_QUERY,
-        truncated: flags & FLAG.MESSAGE_TRUNCATED,
-        authoritative: flags & FLAG.AUTHORITATIVE,
-        isResponse: flags & FLAG.RESPONSE
-    };
+        const numQuestions = reader.readUInt16BE();
+        const numAnswers = reader.readUInt16BE();
+        const numNSRecords = reader.readUInt16BE();
+        const numAdditionalRecords = reader.readUInt16BE();
 
-    const numQuestions = reader.readUInt16BE();
-    const numAnswers = reader.readUInt16BE();
-    const numNSRecords = reader.readUInt16BE();
-    const numAdditionalRecords = reader.readUInt16BE();
+        result.questions = [];
+        for(let i = 0; i < numQuestions; i++) {
+            result.questions.push(Question.read(reader));
+        }
 
+        result.records = [];
+        for(let i = 0; i < numAnswers + numNSRecords + numAdditionalRecords; i++) {
+            result.records.push(ResourceRecord.read(reader));
+        }
+
+        return result;
+
+    },
+    write: (builder, message) => {
+
+        builder.writeUInt16BE(message.id);
+        builder.writeUInt16BE(
+            message.flags?.recursionAvailable && FLAG.RECURSION_AVAILABLE |
+            message.flags?.recursiveQuery && FLAG.RECURSIVE_QUERY |
+            message.flags?.truncated && FLAG.MESSAGE_TRUNCATED |
+            message.flags?.authoritative && FLAG.AUTHORITATIVE |
+            message.flags?.isReponse && FLAG.RESPONSE
+        );
+
+        // no resource records
+        builder.writeUInt16BE(message.questions.length);
+        builder.writeUInt16BE(0).writeUInt16BE(0).writeUInt16BE(0);
+
+        // write question
+        for(const question of message.questions) {
+            Question.write(builder, question);
+        }
+
+    }
 };
+
+module.exports = {DNSMessage, DNSReader, DNSBuilder};
