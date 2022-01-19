@@ -1,3 +1,4 @@
+// Methods for serializing/deserializing messages found in the DNS protocol
 const {BufferBuilder, BufferReader} = require("bufferpants");
 
 // constants
@@ -132,7 +133,7 @@ const RDATA = {
             case RECORD_TYPE.CNAME:
             case RECORD_TYPE.PTR:
             case RECORD_TYPE.NS:
-                return readDomainName(reader);
+                return reader.readDomainName();
 
             case RECORD_TYPE.SOA:
                 return {
@@ -218,6 +219,8 @@ const DNSMessage = {
             authoritative: flags & FLAG.AUTHORITATIVE,
             isResponse: flags & FLAG.RESPONSE
         };
+        result.responseCode = flags & 0b1111;
+        result.opcode = (flags >> 11) & 0b1111;
     
         const numQuestions = reader.readUInt16BE();
         const numAnswers = reader.readUInt16BE();
@@ -239,13 +242,16 @@ const DNSMessage = {
     },
     write: (builder, message) => {
 
+        // FIXME: this func doesn't enforce the 512-byte message size limit
         builder.writeUInt16BE(message.id);
         builder.writeUInt16BE(
             message.flags?.recursionAvailable && FLAG.RECURSION_AVAILABLE |
             message.flags?.recursiveQuery && FLAG.RECURSIVE_QUERY |
             message.flags?.truncated && FLAG.MESSAGE_TRUNCATED |
             message.flags?.authoritative && FLAG.AUTHORITATIVE |
-            message.flags?.isReponse && FLAG.RESPONSE
+            message.flags?.isReponse && FLAG.RESPONSE |
+            message.opcode << 11 |
+            message.responseCode
         );
 
         // no resource records
@@ -260,4 +266,12 @@ const DNSMessage = {
     }
 };
 
-module.exports = {DNSMessage, DNSReader, DNSBuilder};
+module.exports = {
+    DNSMessage,
+    DNSReader,
+    DNSBuilder,
+    FLAG,
+    RECORD_TYPE,
+    QUERY_TYPE,
+    RESPONSE_CODE
+};

@@ -29,7 +29,7 @@ module.exports = async (req, res) => {
                 }
             }
 
-            req.pingCache.put(key, {ping, icon});
+            req.pingCache.set(key, {ping, icon});
             res.json(ping);
 
         } catch(error) {

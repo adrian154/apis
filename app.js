@@ -4,7 +4,7 @@ const Cache = require("./cache.js");
 
 // create app and set up middlewares
 const app = express();
-const pingCache = new Cache(60 * 1000, 1024);
+const pingCache = new Cache(1024, 60);
 
 if(config.proxy) {
     app.enable("trust proxy");
