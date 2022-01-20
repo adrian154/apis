@@ -1,13 +1,36 @@
-const dns = require("dns").promises;
+const {RECORD_TYPE} = require("../dns/protocol.js");
+const resolve = require("../dns/index.js");
+
+const RECORDS = {
+    "A": RECORD_TYPE.A,
+    "AAAA": RECORD_TYPE.AAAA,
+    "CAA": RECORD_TYPE.CAA,
+    "CNAME": RECORD_TYPE.CNAME,
+    "MX": RECORD_TYPE.MX,
+    "NS": RECORD_TYPE.NS,
+    "PTR": RECORD_TYPE.PTR,
+    "SOA": RECORD_TYPE.SOA,
+    "SRV": RECORD_TYPE.SRV,
+    "TXT": RECORD_TYPE.TXT
+};
 
 module.exports = async (req, res) => {
     
-    if(!req.query.hostname || !req.query.record) res.sendStatus(400);
+    if(!req.query.hostname || !req.query.record) return res.status(400).json({error: "Missing fields"});
+    
+    // check if domains have invalid characters
+    const hostname = req.query.hostname;
+    if(!hostname.match(/^[a-zA-Z0-9.\-]+$/)) return res.status(400).json({error: "Invalid domain"});
+    if(hostname[hostname.length - 1] != ".") hostname.push("."); // make sure domains are fully qualified
 
-    try {
-        res.json(await dns.resolve(req.query.hostname, req.query.record));
-    } catch(error) {
-        res.json({dnsError: error.code});
-    }
+    // check record type
+    const type = RECORDS[req.query.record];
+    if(!type) return res.status(400).json({error: "Nonexistent or unsupported record type"});
+
+    // make the request
+    const logs = [];
+    const trace = message => logs.push(message);
+    const answer = await resolve(req.query.hostname, type, trace);
+    res.json({logs, answer});
 
 };
