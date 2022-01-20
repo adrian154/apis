@@ -77,14 +77,19 @@ const queryServer = (dnsServer, ...questions) => new Promise((resolve, reject) =
 });
 
 // iterative DNS query
-const resolve = async (fqdn, type, trace) => { 
+// may recurse for CNAMEs, but loops are automatically detected
+const resolve = async (fqdn, type, trace, existingCNAMEs) => { 
 
     // start from the root nameservers
-    let nameservers = ROOT_NAMESERVERS;
     const labels = fqdn.split(".");
-    const currentDepth = 1;
-    const log = [];
+    let nameservers = ROOT_NAMESERVERS;
+    
+    // prevent circular silliness
+    if(!existingCNAMEs) {
+        existingCNAMEs = [fqdn];
+    }
 
+    trace(`>>> Beginning resolution of domain "${fqdn}"`);
     for(let i = 0; i < 32; i++) {
 
         trace(`Nameservers: ${nameservers.join(", ")}`);
@@ -97,7 +102,7 @@ const resolve = async (fqdn, type, trace) => {
 
             try {
 
-                trace(`Querying nameserver ${nameserver}...`);
+                trace(`Sent query to nameserver ${nameserver}`);
                 const time = Date.now();
                 const reply = await queryServer(nameserver, {domain: fqdn, type, class: 1});
                 trace(`Received reply (${Date.now() - time}ms)`);
@@ -106,32 +111,68 @@ const resolve = async (fqdn, type, trace) => {
 
                     trace(`Reply is authoritative!`);
                     if(reply.responseCode == DNSProtocol.RESPONSE_CODE.NAME_ERROR) {
-                        trace(`No domain was found.`);
+                        trace(`<<< Answer: No domain was found.`);
                         return null;
                     } else {
-                        // cname logic
+                        
+                        let cname;
+                        while(true) {
+                            
+                            // check if there's a good answer
+                            const answers = reply.records.filter(record => record.type == type && record.domain == (cname || fqdn) && record.class == 1);
+                            if(answers.length > 0) {
+                                trace(`<<< Answer: Received ${answers.length} records`);
+                                return answers;
+                            }
+
+                            // if we've already been redirected, another request may be necessary
+                            if(cname) {
+                                trace(`No answers for CNAME "${cname}" were received in the initial request, performing another lookup...`);
+                                return resolve(cname, type, trace, existingCNAMEs);
+                            }
+
+                            // cname time...
+                            trace(`No records of the requested type matching "${fqdn}" were received, checking for CNAMEs...`);
+                            const cnames = reply.records.filter(record => record.type == DNSProtocol.RECORD_TYPE.CNAME && record.domain == fqdn && record.class == 1);
+                            if(cnames.length > 0) {
+                                
+                                // check for funny business
+                                if(cnames.length > 1) {
+                                    trace(`<<< Fatal: Multiple CNAMEs for the same domain.`);
+                                    return null;
+                                }
+
+                                const record = cnames[0];
+                                cname = record.rdata;
+                                if(existingCNAMEs.includes(cname)) {
+                                    trace(`<<< Fatal: CNAME chain detected (${existingCNAMEs.join(" -> ")} -> ${cname})`);
+                                    return null;
+                                }
+
+                                existingCNAMEs.push(cname);
+
+                            }
+
+                        }
+
                         return;
+                    
                     }
 
                 } else {
 
-                    trace(`Reply is not authoritative, looking for a suitable referral...`);
+                    trace(`Reply is not authoritative, checking for a suitable referral`);
 
-                    // pick nameservers that are closer to the desired name
+                    // FIXME: this code doesn't check for horizontal or even backwards references 
                     const nextNameservers = reply.records.filter(record => {
                         if(record.class == 1 && record.type == DNSProtocol.RECORD_TYPE.NS) {
-
-                            const nsParts = record.rdata.split(".");
-                            if(nsParts.length <= currentDepth) {
-                                trace(`Ignoring NS record for "${record.rdata}" since it's not closer to the final domain`);
-                                return false;
-                            }
                             
                             // check if our domain is included in this nameserver's zone
-                            const matchingParts = nsParts.slice(nsParts.length - currentDepth, nsParts.length);
+                            const parts = record.domain.split(".");
+                            const matchingParts = labels.slice(labels.length - parts.length, labels.length);
                             for(let i = 0; i < matchingParts.length; i++) {
-                                if(matchingParts[i] != labels[labels.length - currentDepth + i]) {
-                                    trace(`Ignoring NS record for unrelated domain "${record.rdata}"`);
+                                if(matchingParts[i] != parts[i]) {
+                                    trace(`Ignoring NS record for unrelated domain "${record.name}"`);
                                     return false;
                                 }
                             }
@@ -156,16 +197,16 @@ const resolve = async (fqdn, type, trace) => {
 
         } while(nameservers.length > 0);
 
-        trace("Didn't receive an authoritative response or referral from any of the nameservers that were contacted");
+        trace("<<< Fatal: Didn't receive an authoritative response or referral from any of the nameservers that were contacted");
         return null;
 
     }
 
-    trace("Max queries limit was reached without receiving an authoritative response");
+    trace("<<< Fatal: Max queries limit was reached without receiving an authoritative response");
     return null;
 
 };
 
-resolve("twitter.com.", DNSProtocol.RECORD_TYPE.A, message => {
+resolve("www.bing.com.", DNSProtocol.RECORD_TYPE.A, message => {
     console.log(message);
-});
+}).then(console.log);
