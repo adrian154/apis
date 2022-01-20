@@ -154,8 +154,6 @@ const resolve = async (fqdn, type, trace, existingCNAMEs) => {
                             }
 
                         }
-
-                        return;
                     
                     }
 
@@ -183,6 +181,7 @@ const resolve = async (fqdn, type, trace, existingCNAMEs) => {
                     }).map(record => record.rdata);
 
                     if(nextNameservers) {
+                        trace(`Received ${nextNameservers.length} candidate nameservers`);
                         nameservers = nextNameservers;
                         continue;
                     }
@@ -207,6 +206,6 @@ const resolve = async (fqdn, type, trace, existingCNAMEs) => {
 
 };
 
-resolve("www.bing.com.", DNSProtocol.RECORD_TYPE.A, message => {
+resolve("mc.bithole.dev.", DNSProtocol.RECORD_TYPE.A, message => {
     console.log(message);
 }).then(console.log);
