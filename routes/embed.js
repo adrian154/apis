@@ -3,7 +3,7 @@ const escape = text => text.replace(/>/g, "&gt;").replace(/</g, "&lt;").replace(
 module.exports = (req, res) => {
     const title = escape(req.query.title ?? "");
     const description = escape(req.query.desc ?? "");
-    const url = escape(req.query.url ?? "/static/default-image.png");
+    const url = escape(req.query.url ?? "/images/default-image.png");
     res.setHeader("Content-Type", "text/html").send([
         "<!DOCTYPE html>",
         '<html style="height: 100%;">',
