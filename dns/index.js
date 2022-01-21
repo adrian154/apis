@@ -61,7 +61,7 @@ socket.on("message", data => {
 });
 
 const queryServer = (dnsServer, ...questions) => new Promise((resolve, reject) => {
-    
+
     const builder = new DNSProtocol.DNSBuilder();
     const id = getNewQueryID();
     DNSProtocol.DNSMessage.write(builder, {id, questions, opcode: DNSProtocol.QUERY_TYPE.STANDARD});
@@ -72,6 +72,7 @@ const queryServer = (dnsServer, ...questions) => new Promise((resolve, reject) =
             reject(err);
         }
         promiseCallbacks[id] = {resolve, reject};
+        setTimeout(() => reject(new Error("Request timed out")), 3000);
     });
 
 });
@@ -93,8 +94,8 @@ const checkZone = (fqdnLabels, zone) => {
 const resolve = async (fqdn, type, logger, existingCNAMEs) => { 
 
     // start from the root nameservers
+    let nameservers = ROOT_NAMESERVERS.slice(0);
     const labels = fqdn.split(".");
-    let nameservers = ROOT_NAMESERVERS;
     
     // prevent circular silliness
     if(!existingCNAMEs) {
@@ -108,31 +109,30 @@ const resolve = async (fqdn, type, logger, existingCNAMEs) => {
         do {
 
             // pick nameserver, remove it from the list
-            logger.log(`Nameservers: ${nameservers.join(", ")}`);
+            logger.log(`Nameservers: ${nameservers.join(" ")}`);
             const nameserver = nameservers.splice(Math.floor(Math.random() * nameservers.length), 1)[0];
 
             let reply;
             try {
                 const time = Date.now();
-                logger.log(`Querying nameserver ${nameserver}`);
+                logger.log(`Querying ${nameserver}`);
                 reply = await queryServer(nameserver, {domain: fqdn, type, class: 1});
-                logger.log(`Received reply in ${Date.now() - time}ms`);
+                logger.log(`Received ${reply.flags.authoritative ? "authoritative" : "non-authoritative"} reply in ${Date.now() - time}ms`);
             } catch(error) {
-                logger.error(`Error querying server: ${error}`);
+                logger.error(`Failed to query the server: ${error.message}`);
                 continue;
             }
 
             // handle server failures
             if(reply.responseCode != DNSProtocol.RESPONSE_CODE.OK && reply.responseCode != DNSProtocol.RESPONSE_CODE.NAME_ERROR) {
-                logger.error(`The query failed: DNS error ${reply.responseCode} (${ERROR_NAMES[reply.responseCode] || "unknown"})`);
+                logger.error(`The server responded with an error: ${ERROR_NAMES[reply.responseCode] || "unknown"} (${reply.responseCode})`);
                 continue;
             }
 
             if(reply.flags.authoritative) {
 
-                logger.log(`Reply is authoritative!`);
                 if(reply.responseCode == DNSProtocol.RESPONSE_CODE.NAME_ERROR) {
-                    logger.error("The domain doesn't exist.");
+                    logger.warn("The domain doesn't exist.");
                     return [];
                 }
 
@@ -142,7 +142,7 @@ const resolve = async (fqdn, type, logger, existingCNAMEs) => {
                     // check if there's a record exactly matching the query
                     const answers = filterRecords(reply.records, cname || fqdn, type);
                     if(answers.length > 0) {
-                        logger.log(`Received ${answers.length} records that answer the query.`);
+                        logger.log(`Found ${answers.length} record(s) that answer the query.`);
                         return answers;
                     }
 
@@ -184,7 +184,7 @@ const resolve = async (fqdn, type, logger, existingCNAMEs) => {
 
             } else {
 
-                logger.log(`Reply is not authoritative, checking for a suitable referral`);
+                logger.log("Checking for a suitable referral...");
 
                 // FIXME: this code doesn't check for horizontal or even backwards references 
                 const nextNameservers = reply.records.filter(record => {
@@ -197,10 +197,12 @@ const resolve = async (fqdn, type, logger, existingCNAMEs) => {
                 }).map(record => record.rdata);
 
                 if(nextNameservers) {
-                    logger.log(`Received ${nextNameservers.length} nameservers to query next`);
+                    logger.log(`Received ${nextNameservers.length} nameserver(s) to query next`);
                     nameservers = nextNameservers;
                     break;
                 }
+
+                logger.warn("No suitable referral was found.");
 
             }
             
