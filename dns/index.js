@@ -109,13 +109,13 @@ const resolve = async (fqdn, type, logger, existingCNAMEs) => {
         do {
 
             // pick nameserver, remove it from the list
-            logger.log(`Nameservers: ${nameservers.join(" ")}`);
+            logger.log(`Nameservers:\n${nameservers.map(ns => `- ${ns}`).join("\n")}`);
             const nameserver = nameservers.splice(Math.floor(Math.random() * nameservers.length), 1)[0];
 
             let reply;
             try {
                 const time = Date.now();
-                logger.log(`Querying ${nameserver}`);
+                logger.log(`\nQuerying ${nameserver}`);
                 reply = await queryServer(nameserver, {domain: fqdn, type, class: 1});
                 logger.log(`Received ${reply.flags.authoritative ? "authoritative" : "non-authoritative"} reply in ${Date.now() - time}ms`);
             } catch(error) {
@@ -148,7 +148,7 @@ const resolve = async (fqdn, type, logger, existingCNAMEs) => {
 
                     // if we've been redirected, a second DNS query may be necessary
                     if(cname) {
-                        logger.warn(`No answers for CNAME "${cname}" were received in the initial request, performing another lookup...\n\n`);
+                        logger.warn(`No answers for CNAME "${cname}" were received in the initial request, performing another lookup...\n`);
                         return resolve(cname, type, logger, existingCNAMEs);
                     }
 
@@ -187,18 +187,18 @@ const resolve = async (fqdn, type, logger, existingCNAMEs) => {
                 logger.log("Checking for a suitable referral...");
 
                 // FIXME: this code doesn't check for horizontal or even backwards references 
-                const nextNameservers = reply.records.filter(record => {
+                const nsRecords = reply.records.filter(record => {
                     if(record.class == 1 && record.type == DNSProtocol.RECORD_TYPE.NS) {
                         if(checkZone(labels, record.domain)) {
                             return true;
                         }
                         logger.warn(`Ignoring NS record for unrelated zone "${record.domain}"`);
                     }
-                }).map(record => record.rdata);
+                });
 
-                if(nextNameservers) {
-                    logger.log(`Received ${nextNameservers.length} nameserver(s) to query next`);
-                    nameservers = nextNameservers;
+                if(nsRecords) {
+                    logger.log(`Received ${nsRecords.length} nameserver(s) for zone "${nsRecords[0].domain}"`);
+                    nameservers = nsRecords.map(record => record.rdata);
                     break;
                 }
 

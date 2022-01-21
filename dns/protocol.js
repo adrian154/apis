@@ -147,7 +147,7 @@ const RDATA = {
                 };
 
             case RECORD_TYPE.A:
-                return reader.readIPv4();
+                return {ip: reader.readIPv4()};
 
             case RECORD_TYPE.TXT:
                 const strings = [];
