@@ -19,9 +19,9 @@ module.exports = async (req, res) => {
     if(!req.query.hostname || !req.query.record) return res.status(400).json({error: "Missing fields"});
     
     // check if domains have invalid characters
-    const hostname = req.query.hostname;
+    let hostname = req.query.hostname;
     if(!hostname.match(/^[a-zA-Z0-9.\-]+$/)) return res.status(400).json({error: "Invalid domain"});
-    if(hostname[hostname.length - 1] != ".") hostname.push("."); // make sure domains are fully qualified
+    if(hostname[hostname.length - 1] != ".") hostname += "."; // make sure domains are fully qualified
 
     // check record type
     const type = RECORDS[req.query.record];
@@ -29,8 +29,13 @@ module.exports = async (req, res) => {
 
     // make the request
     const logs = [];
-    const trace = message => logs.push(message);
-    const answer = await resolve(req.query.hostname, type, trace);
-    res.json({logs, answer});
+    const logger = {
+        error: message => logs.push({type: "error", message}),
+        warn: message => logs.push({type: "warning", message}),
+        log: message => logs.push({type: "info", message})
+    };
+
+    const answers = await resolve(hostname, type, logger);
+    res.json({logs, answers});
 
 };
