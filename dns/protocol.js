@@ -120,7 +120,7 @@ class DNSReader extends BufferReader {
 }
 
 const RDATA = {
-    read: (reader, type, recordClass) => {
+    read: (reader, type, end) => {
         switch(type) {
 
             case RECORD_TYPE.MX:
@@ -154,7 +154,7 @@ const RDATA = {
                 do {
                     strings.push(reader.readString());
                 } while(!reader.end());
-                return strings;
+                return strings.join("");
 
             case RECORD_TYPE.AAAA:
                 return reader.readIPv6();
@@ -162,7 +162,8 @@ const RDATA = {
             case RECORD_TYPE.CAA:
                 return {
                     flags: reader.readUInt8(), // TODO
-                    issuer: reader.readString()
+                    tag: reader.readString(),
+                    value: reader.readBuffer(end - reader.position).toString("utf-8")
                 };
 
             case RECORD_TYPE.SRV:
@@ -189,7 +190,7 @@ const ResourceRecord = {
         result.ttl = reader.readUInt32BE();
         const length = reader.readUInt16BE();
         const end = reader.position + length;
-        result.rdata = RDATA.read(reader, result.type, result.class);
+        result.rdata = RDATA.read(reader, result.type, end);
         reader.seek(end);
         return result;
     }
