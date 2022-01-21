@@ -35,7 +35,11 @@ module.exports = async (req, res) => {
         log: message => logs.push({type: "info", message})
     };
 
-    const answers = await resolve(hostname, type, logger);
-    res.json({logs, answers});
+    try {
+        const answers = await resolve(hostname, type, logger);
+        res.json({logs, answers});
+    } catch(error) {
+        res.status(500).json({error: error.message});
+    }
 
 };
