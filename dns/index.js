@@ -56,7 +56,7 @@ socket.on("message", data => {
     if(message.flags.truncated) callbacks.reject(new Error("Response was truncated"));
 
     callbacks.resolve(message);
-    delete callbacks[message.id];
+    delete promiseCallbacks[message.id];
 
 });
 
@@ -72,8 +72,12 @@ const queryServer = (dnsServer, ...questions) => new Promise((resolve, reject) =
             reject(err);
         }
         promiseCallbacks[id] = {resolve, reject};
-        setTimeout(() => reject(new Error("Request timed out")), 3000);
     });
+
+    setTimeout(() => {
+        reject(new Error("Request timed out"));
+        delete promiseCallbacks[id];
+    }, 3000);
 
 });
 
@@ -197,7 +201,7 @@ const resolve = async (fqdn, type, logger, existingCNAMEs) => {
                 });
 
                 if(nsRecords) {
-                    logger.log(`Received ${nsRecords.length} nameserver(s) for zone "${nsRecords[0].domain}"`);
+                    logger.log(`Got ${nsRecords.length} nameserver(s) for zone "${nsRecords[0].domain}"`);
                     nameservers = nsRecords.map(record => record.rdata);
                     break;
                 }
