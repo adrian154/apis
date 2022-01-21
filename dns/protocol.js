@@ -68,7 +68,7 @@ class DNSReader extends BufferReader {
         return this.readBuffer(this.readUInt8()).toString("utf-8");
     }
 
-    readDomainName() {
+    readDomainName(isEmail) {
 
         // collect labels
         const labels = [];
@@ -90,7 +90,10 @@ class DNSReader extends BufferReader {
 
         } while(label.length > 0); // label of length zero (single 0 byte) indicates end of domain name
     
-        // output FQDN
+        if(isEmail) {
+            return labels[0] + "@" + labels.slice(1).join(".");
+        }
+
         return labels.join(".");
 
     }
@@ -138,7 +141,7 @@ const RDATA = {
             case RECORD_TYPE.SOA:
                 return {
                     mname: reader.readDomainName(),
-                    rname: reader.readDomainName(),
+                    rname: reader.readDomainName(true),
                     serial: reader.readUInt32BE(),
                     refresh: reader.readUInt32BE(),
                     retry: reader.readUInt32BE(),
