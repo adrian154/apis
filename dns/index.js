@@ -1,227 +1,135 @@
-// Custom DNS resolver for tracing delegations.
-const DNSProtocol = require("./protocol.js");
+const DNS = require("./protocol.js");
 const dgram = require("dgram");
+const net = require("net");
 
-// constants
-const ERROR_NAMES = {
-    [DNSProtocol.RESPONSE_CODE.BAD_QUERY]: "Bad Query",
-    [DNSProtocol.RESPONSE_CODE.SERVER_ERROR]: "Server Error",
-    [DNSProtocol.RESPONSE_CODE.UNSUPPORTED]: "Not Supported",
-    [DNSProtocol.RESPONSE_CODE.REFUSED]: "Refused"
-};
-
-const ROOT_NAMESERVERS = [
-    "a.root-servers.net",
-    "b.root-servers.net",
-    "c.root-servers.net",
-    "d.root-servers.net",
-    "e.root-servers.net",
-    "f.root-servers.net",
-    "g.root-servers.net",
-    "h.root-servers.net",
-    "i.root-servers.net",
-    "j.root-servers.net",
-    "k.root-servers.net",
-    "l.root-servers.net",
-    "m.root-servers.net"
-];
-
-const promiseCallbacks = {};
+// each DNS request is associated with a unique 16-bit request ID
 let nextQueryID = 0;
-const socket = dgram.createSocket("udp4");
+const getNextQueryID = () => {
 
-const getNewQueryID = () => {
-    if(promiseCallbacks[nextQueryID]) {
-        throw new Error("Something has gone terribly wrong.");
+    // check if a callback exists, to avoid conflating responses
+    if(queryCallbacks.has(nextQueryID)) {
+        throw new Error("Internal error, couldn't generate a unique query ID");
     }
+
+    // increment and return
     const answer = nextQueryID;
     nextQueryID = (nextQueryID + 1) % 65536;
     return answer;
-};      
 
-// message handling logc
-socket.on("message", data => {
+};
+
+// map IDs to callbacks
+const queryCallbacks = new Map();
+
+// create UDP socket to receive messages over
+const UDPsocket = dgram.createSocket("udp4");
+
+// message handling logic
+UDPsocket.on("message", data => {
+
+    // deserialize message
+    const reader = new DNS.DNSReader(data);
+    const message = DNS.DNSMessage.read(reader);
     
-    const reader = new DNSProtocol.DNSReader(data);
-    const message = DNSProtocol.DNSMessage.read(reader);
-    const callbacks = promiseCallbacks[message.id];
-
-    // ignore message if id is unknown
-    if(!callbacks) return;
-
-    // ignore message if not a response
-    if(!message.flags.isResponse) return;
-
-    // various failure conditions
-    if(message.flags.truncated) callbacks.reject(new Error("Response was truncated"));
-
-    callbacks.resolve(message);
-    delete promiseCallbacks[message.id];
+    // try to resolve the matching callback
+    const callbacks = queryCallbacks.get(message.id);
+    if(callbacks && message.flags.isResponse) {
+        callbacks.resolve(message);
+        queryCallbacks.delete(message.id);
+    }
 
 });
 
-const queryServer = (dnsServer, ...questions) => new Promise((resolve, reject) => {
+const queryServerUDP = (server, message, id) => new Promise((resolve, reject) => {
 
-    const builder = new DNSProtocol.DNSBuilder();
-    const id = getNewQueryID();
-    DNSProtocol.DNSMessage.write(builder, {id, questions, opcode: DNSProtocol.QUERY_TYPE.STANDARD});
-
-    const message = builder.build();
-    socket.send(message, 0, message.length, 53, dnsServer, (err) => {
+    // set callback
+    queryCallbacks.set(id, {resolve, reject});
+    UDPsocket.send(message, 0, message.length, 53, server, err => {
         if(err) {
+            queryCallbacks.delete(id)
             reject(err);
         }
-        promiseCallbacks[id] = {resolve, reject};
     });
 
+
+    // fail after set timeout
     setTimeout(() => {
-        reject(new Error("Request timed out"));
-        delete promiseCallbacks[id];
+        queryCallbacks.delete(id);
+        reject(new Error("Timed out"));
     }, 3000);
 
 });
 
-const filterRecords = (records, domain, type) => records.filter(record => record.domain == domain && record.type == type && record.class == 1);
-const checkZone = (fqdnLabels, zone) => {
-    const zoneParts = zone.split(".");
-    const matchingParts = fqdnLabels.slice(fqdnLabels.length - zoneParts.length, fqdnLabels.length);
-    for(let i = 0; i < matchingParts.length; i++) {
-        if(matchingParts[i] != zoneParts[i]) {
-            return false;
-        }
-    }
-    return true;
-};
+const queryServerTCP = (server, message) => new Promise((resolve, reject) => {
 
-// iterative DNS query
-// may recurse for CNAMEs, but loops are automatically detected
-const resolve = async (fqdn, type, logger, existingCNAMEs) => { 
+    const socket = net.createConnection({host: server, port: 53}, () => {
 
-    // start from the root nameservers
-    let nameservers = ROOT_NAMESERVERS.slice(0);
-    const labels = fqdn.split(".");
-    
-    // prevent circular silliness
-    if(!existingCNAMEs) {
-        existingCNAMEs = [fqdn];
-    }
+        // when using TCP, messages are prefixed with the length 
+        const lengthHeader = Buffer.alloc(2);
+        lengthHeader.writeUInt16BE(message.length);
+        socket.write(lengthHeader);
+        socket.write(message);
+        socket.on("drain", () => socket.end());
 
-    logger.log(`Beginning resolution of domain "${fqdn}"`);
-    for(let query = 0; query < 32; query++) {
-
-        // iterate through nameservers in random order
-        do {
-
-            // pick nameserver, remove it from the list
-            logger.log(`Nameservers:\n${nameservers.map(ns => `- ${ns}`).join("\n")}`);
-            const nameserver = nameservers.splice(Math.floor(Math.random() * nameservers.length), 1)[0];
-
-            let reply;
-            try {
-                const time = Date.now();
-                logger.log(`\nQuerying ${nameserver}`);
-                reply = await queryServer(nameserver, {domain: fqdn, type, class: 1});
-                logger.log(`Received ${reply.flags.authoritative ? "authoritative" : "non-authoritative"} reply in ${Date.now() - time}ms`);
-            } catch(error) {
-                logger.error(`Failed to query the server: ${error.message}`);
-                continue;
-            }
-
-            // handle server failures
-            if(reply.responseCode != DNSProtocol.RESPONSE_CODE.OK && reply.responseCode != DNSProtocol.RESPONSE_CODE.NAME_ERROR) {
-                logger.error(`The server responded with an error: ${ERROR_NAMES[reply.responseCode] || "unknown"} (${reply.responseCode})`);
-                continue;
-            }
-
-            if(reply.flags.authoritative) {
-
-                if(reply.responseCode == DNSProtocol.RESPONSE_CODE.NAME_ERROR) {
-                    logger.warn("The domain doesn't exist.");
-                    return [];
-                }
-
-                let cname;
-                while(true) {
-                    
-                    // check if there's a record exactly matching the query
-                    const answers = filterRecords(reply.records, cname || fqdn, type);
-                    if(answers.length > 0) {
-                        logger.log(`Found ${answers.length} record(s) that answer the query.`);
-                        return answers;
-                    }
-
-                    // if we've been redirected, a second DNS query may be necessary
-                    if(cname) {
-                        logger.warn(`No answers for CNAME "${cname}" were received in the initial request, performing another lookup...\n`);
-                        return resolve(cname, type, logger, existingCNAMEs);
-                    }
-
-                    // check if the server sent a CNAME record instead
-                    logger.log(`No records of the requested type matching "${fqdn}" were received, checking for CNAMEs...`);
-                    const cnames = reply.records.filter(record => record.type == DNSProtocol.RECORD_TYPE.CNAME && record.domain == fqdn && record.class == 1);
-                    if(cnames.length > 0) {
-                        
-                        // make sure there's only one cname
-                        if(cnames.length > 1) {
-                            logger.error(`Fatal: Multiple CNAMEs for the same domain.`);
-                            return;
-                        }
-
-                        const record = cnames[0];
-                        logger.log(`Found CNAME for "${cname || fqdn}" -> "${record.rdata}"`);
-                        cname = record.rdata;
-
-                        // don't pursue circular CNAME chains
-                        if(existingCNAMEs.includes(cname)) {
-                            logger.error(`Fatal: CNAME chain detected (${existingCNAMEs.join(" -> ")} -> ${cname})`);
-                            return;
-                        }
-
-                        existingCNAMEs.push(cname);
-
-                    } else {
-                        logger.warn(`No records of the requested type exist for this domain.`);
-                        return [];
-                    }
-
-                }
-
-            } else {
-
-                logger.log("Checking for a suitable referral...");
-
-                // FIXME: this code doesn't check for horizontal or even backwards references 
-                const nsRecords = reply.records.filter(record => {
-                    if(record.class == 1 && record.type == DNSProtocol.RECORD_TYPE.NS) {
-                        if(checkZone(labels, record.domain)) {
-                            return true;
-                        }
-                        logger.warn(`Ignoring NS record for unrelated zone "${record.domain}"`);
-                    }
-                });
-
-                if(nsRecords) {
-                    logger.log(`Got ${nsRecords.length} nameserver(s) for zone "${nsRecords[0].domain}"`);
-                    nameservers = nsRecords.map(record => record.rdata);
-                    break;
-                }
-
-                logger.warn("No suitable referral was found.");
-
-            }
+        // accumulate data as it comes in
+        let length = null;
+        let buf = Buffer.alloc(0);
+        socket.on("data", data => {
             
-        } while(nameservers.length > 0);
+            // add new data to current buffer
+            buf = Buffer.concat([buf, data]);
 
-        if(nameservers.length == 0) {
-            logger.error("Fatal: Didn't receive an authoritative response or referral from any of the nameservers that were contacted");
-            return;
+            // grab length prefix
+            if(length == null && buf.length > 2) {
+                length = buf.readUInt16BE();
+                buf = buf.slice(2, buf.length);
+            }
+
+            // if enough data has been received, decode it
+            if(buf.length >= length) {
+                const reader = new DNS.DNSReader(buf);
+                resolve(DNS.DNSMessage.read(reader));
+            }
+
+        });
+
+        // handle error conditions
+        socket.on("timeout", () => socket.destroy());
+        socket.on("close", () => reject("Socket closed before enough data could be received"));
+
+    });
+
+});
+
+const queryServer = async (server, questions, options) => {
+
+    // serialize message
+    const id = getNextQueryID();
+    const builder = new DNS.DNSBuilder();
+    DNS.DNSMessage.write(builder, {
+        id, questions,
+        flags: {recursiveQuery: options?.recursive},
+        opcode: DNS.QUERY_TYPE.STANDARD
+    });
+    const message = builder.build();
+
+    // query the server, handle truncation
+    const response = await queryServerUDP(server, message, id);
+    if(response.flags.truncated) {
+        try {
+            const fullResponse = await queryServerTCP(server, message);
+            if(fullResponse.flags.truncated) {
+                throw new Error("The server sent a truncated response when queried over both UDP and TCP.");
+            }
+            fullResponse.comment = "The server sent a truncated response when queried over UDP, so it was automatically re-queried via TCP.";
+            return fullResponse;
+        } catch(err) {
+            throw new Error("The server sent a truncated response when queried over UDP, and couldn't be queried via TCP.");
         }
-
     }
-    
-    logger.error("Fatal: Max queries limit was reached without receiving an authoritative response");
-    return;
+
+    return response;
 
 };
 
-module.exports = resolve;
+module.exports = queryServer;
