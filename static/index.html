@@ -11,6 +11,14 @@
                 margin: auto;
                 padding: 1.0em;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+                font-size: 12pt;
+            }
+
+            code {
+                font-size: 11pt;
+                background: #f0f0f0;
+                padding: 0.1em 0.2em;
+                border-radius: 5px;
             }
 
             .endpoint {
@@ -25,6 +33,19 @@
 
             h1, b {
                 font-weight: 600;
+            }
+
+            table, td, th {
+                border-collapse: collapse;
+            }
+
+            table {
+                margin: 1.0em 0;
+            }
+
+            td, th {
+                padding: 0.5em;
+                border: 1px solid #aaa;
             }
         </style>
     </head>
@@ -100,10 +121,51 @@
                 <li><code>flags</code>:
                     <ul>
                         <li><code>recursionAvailable</code>: Whether the nameserver is capable of answering recursive queries</li>
+                        <li><code>recursiveQuery</code>: Whether a recursive query was requested; this value is copied from the original request</li>
+                        <li><code>truncated</code>: Whether the message was truncated; this should <i>never</i> be set because this endpoint automatically retries truncated requests over TCP.</li>
+                        <li><code>authoritative</code>: Whether the nameserver is authoritative for the requested domains.</li>
+                        <li><code>isResponse</code>: Whether the message is a response to a query. This should always be set.</li>
+                    </ul>
+                </li>
+                <li><code>responseCode</code>: The status of the response. Generally one of the following values:
+                    <table>
+                        <tr>
+                            <th>Value</th>
+                            <th>Meaning</th>
+                        </tr>
+                        <tr><td>0</td><td>OK</td></tr>
+                        <tr><td>1</td><td>Bad query</td></tr>
+                        <tr><td>2</td><td>Server error</td></tr>
+                        <tr><td>3</td><td>Name error</td></tr>
+                        <tr><td>4</td><td>Unsupported</td></tr>
+                        <tr><td>5</td><td>Refused</td></tr>
+                    </table>
+                </li>
+                <li><code>opcode</code>: The operation requested; always 1, a standard query.</li>
+                <li><code>questions</code>: An array of questions sent in the original query. The value of this array should be ignored.</li>
+                <li><code>records</code>: An array of resource records sent in response to the query. Each resource record is an object with the following fields:
+                    <ul>
+                        <li><code>domain</code>: the name which the resource record is associated with</li>
+                        <li><code>type</code>: the resource record's type</li>
+                        <li><code>class</code>: the resource record's class; should be 1 for Internet</li>
+                        <li><code>ttl</code>: how long the resource record can be cached, in seconds</li>
+                        <li><code>rdata</code>: The value of the resource record. This API only understands how to decode RDATA for a limited set of resource records:
+                            <ul>
+                                <li><b>A, AAAA</b>: <code>rdata</code> is the IP address.</li>
+                                <li><b>CNAME, NS, PTR</b>: <code>rdata</code> is the domain name.</li>
+                                <li><b>SOA</b>: <code>rdata</code> is an object with fields <code>mname</code>, <code>rname</code>, <code>serial</code>, <code>refresh</code>, <code>retry</code>, <code>expire</code>, and <code>minimum</code>. See RFC 1035 for info on how to interpret each field.</li>
+                                <li><b>MX</b>: <code>rdata</code> is an object with fields <code>preference</code> and <code>exchange</code>.</li>
+                                <li><b>TXT</b>: <code>rdata</code> is the value of the TXT record. If multiple strings are present, they will be concatenated.</li>
+                                <li><b>CAA</b>: <code>rdata</code> is an object with fields <code>flags</code>, <code>tag</code>, and <code>value</code>.</li>
+                                <li><b>SRV</b>: <code>rdata</code> is an object with fields <code>priority</code>, <code>weight</code>, <code>port</code>, and <code>target</code>.</li>
+                            </ul>
+                            Unsupported resource records will be returned as a Buffer as encoded with <a href="https://nodejs.org/api/buffer.html#buftojson">Buffer#toJSON</a>.
+                        </li>
                     </ul>
                 </li>
             </ul>
         </p>
+        <p>The values in the response are not guaranteed to be sane or correct. This API merely makes a best-effort attempt to correctly deserialize the response sent by the server. Truncated responses will automatically be retried over TCP. If the request could not be completed, a 400 status code is returned. The response value will be a JSON object with a field named <code>error</code> containing a human-readable error.</p>
 
         <!--
         <h1 class="endpoint"></h1>
@@ -113,7 +175,7 @@
         -->
 
         <h1>Terms of Use</h1>
-        <p>I reserve the right to stop providing this service at any time. I cannot guarantee that data retrieved through this API will be accurate. No warranty is provided with this service.</p>
+        <p>I reserve the right to stop providing this service at any time. I cannot guarantee that data retrieved through this API will be accurate. No warranty is provided with this service. By using this service you agree that I shall not be held responsible for any damages or liabilities related to use of this service.</p>
     
     </body>
 </html>
