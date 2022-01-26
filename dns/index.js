@@ -101,13 +101,14 @@ const queryServerTCP = (server, message) => new Promise((resolve, reject) => {
 
 });
 
-const queryServer = async (server, questions, options) => {
+const queryServer = async (server, domain, type, options) => {
 
     // serialize message
     const id = getNextQueryID();
     const builder = new DNS.DNSBuilder();
     DNS.DNSMessage.write(builder, {
-        id, questions,
+        id,
+        questions: [{domain, type, class: 1}],
         flags: {recursiveQuery: options?.recursive},
         opcode: DNS.QUERY_TYPE.STANDARD
     });

@@ -84,32 +84,24 @@
         <p><b>Response</b>: If the target URL is invalid, a 400 status code is returned. If the request could not be made, a 500 status code is returned. Otherwise, the status code and data sent by the server located at the target URL is returned.</p>
         <p>By default, the <code>Access-Control-Allow-Origin</code> header is set to <code>*</code> to enable bypassing CORS restrictions.</p>
 
-        <h1 class="endpoint">/dns-trace</h1>
+        <h1 class="endpoint">/dns-query</h1>
         <p><b>Methods</b>: GET</p>
         <p><b>Parameters</b>:</p>
         <ul>
-            <li><code>hostname</code>: The hostname to be resolved</li>
-            <li>
-                <code>record</code>: One of the following supported record types:
-                <ul>
-                    <li>A</li>
-                    <li>AAAA</li>
-                    <li>CAA</li>
-                    <li>CNAME</li>
-                    <li>MX</li>
-                    <li>NS</li>
-                    <li>PTR</li>
-                    <li>SOA</li>
-                    <li>SRV</li>
-                    <li>TXT</li>
-                </ul>
-            </li>
+            <li><code>hostname</code>: (string) The hostname to be resolved</li>
+            <li><code>nameserver</code>: (string) The nameserver to query</li>
+            <li><code>type</code>: (number) The numerical record type, as defined by the relevant RFCs.</li>
+            <li><code>recursive</code>: (optional, boolean) Whether to ask the nameserver to query recursively.</li>
         </ul>
         <p>
-            <b>Response</b>: A JSON object with two fields:
+            <b>Response</b>: The deserialized JSON response, with the following fields:
             <ul>
-                <li><code>answers</code>: (Array) Records which answer the DNS query, retrieved from the authoritative nameserver for the domain.</li>
-                <li><code>logs</code>: A series of messages describing the DNS resolution process. Each message has a field called <code>type</code> indicating whether the message is an <code>"error"</code>, <code>"warning"</code>, or <code>"info"</code>, and a <code>message</code> field for the actual message itself.</li>
+                <li><code>id</code>: the ID of the DNS transaction</li>
+                <li><code>flags</code>:
+                    <ul>
+                        <li><code>recursionAvailable</code>: Whether the nameserver is capable of answering recursive queries</li>
+                    </ul>
+                </li>
             </ul>
         </p>
 

@@ -177,8 +177,8 @@ const RDATA = {
                     target: reader.readDomainName()
                 };
 
-            // unsupported resource record
-            default: return null;
+            // for unsupported resource records, just return the raw binary
+            default: return reader.readBuffer(end - reader.position);
         
         }
     }
