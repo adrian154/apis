@@ -248,15 +248,7 @@ const DNSMessage = {
 
         // FIXME: this func doesn't enforce the 512-byte message size limit
         builder.writeUInt16BE(message.id);
-        builder.writeUInt16BE(
-            message.flags?.recursionAvailable && FLAG.RECURSION_AVAILABLE |
-            message.flags?.recursiveQuery && FLAG.RECURSIVE_QUERY |
-            message.flags?.truncated && FLAG.MESSAGE_TRUNCATED |
-            message.flags?.authoritative && FLAG.AUTHORITATIVE |
-            message.flags?.isReponse && FLAG.RESPONSE |
-            message.opcode << 11 |
-            message.responseCode
-        );
+        builder.writeUInt16BE((message.flags?.recursiveQuery ? FLAG.RECURSIVE_QUERY : 0) | message.opcode << 11);
 
         // no resource records
         builder.writeUInt16BE(message.questions.length);

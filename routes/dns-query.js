@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
     const type = Number(req.query.type);
 
     try {
-        const response = await queryServer(req.query.nameserver, hostname, type, {recursive: req.query.recursive});
+        const response = await queryServer(req.query.nameserver, hostname, type, req.query.recursive);
         res.json(response);
     } catch(error) {
         res.status(500).json({error: error.message});
