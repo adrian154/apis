@@ -236,10 +236,12 @@ const DNSMessage = {
             result.questions.push(Question.read(reader));
         }
 
-        result.records = [];
-        for(let i = 0; i < numAnswers + numNSRecords + numAdditionalRecords; i++) {
-            result.records.push(ResourceRecord.read(reader));
-        }
+        result.answerRecords = [];
+        result.authorityRecords = [];
+        result.additionalRecords = [];
+        for(let i = 0; i < numAnswers; i++) { result.answerRecords.push(ResourceRecord.read(reader)); }
+        for(let i = 0; i < numNSRecords; i++) { result.authorityRecords.push(ResourceRecord.read(reader)); }
+        for(let i = 0; i < numAdditionalRecords; i++) { result.additionalRecords.push(ResourceRecord.read(reader)); }
 
         return result;
 

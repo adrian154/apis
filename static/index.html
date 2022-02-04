@@ -144,7 +144,7 @@
                 </li>
                 <li><code>opcode</code>: The operation requested; always 1, a standard query.</li>
                 <li><code>questions</code>: An array of questions sent in the original query. The value of this array should be ignored.</li>
-                <li><code>records</code>: An array of resource records sent in response to the query. Each resource record is an object with the following fields:
+                <li><code>answerRecords</code>, <code>authorityRecords</code>, <code>additionalRecords</code>: Arrays of resource records sent in response to the query. Each resource record is an object with the following fields:
                     <ul>
                         <li><code>domain</code>: the name which the resource record is associated with</li>
                         <li><code>type</code>: the resource record's type</li>
