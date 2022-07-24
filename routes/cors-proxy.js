@@ -3,7 +3,8 @@ const fetch = require("node-fetch");
 
 const FILTERED_REQUEST_HEADERS = [
     "host", // host header will always be apis.bithole.dev
-    "x-proxy-url" // no need to expose this 
+    "x-proxy-url", // no need to expose this
+    "x-forwarded-for" 
 ];
 
 const FILTERED_RESPONSE_HEADERS = [

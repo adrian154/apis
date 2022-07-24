@@ -29,6 +29,7 @@ app.get("/headers", require("./routes/headers.js"));
 app.get("/dns-query", require("./routes/dns-query.js"));
 app.get("/mc/ping-server", require("./routes/server-ping.js"));
 app.get("/mc/server-icon", require("./routes/server-icon.js"));
+app.get("/dns-query-addrs", require("./routes/dns-query-addrs"));
 
 // error handler routes
 app.use((req, res, next) => {

@@ -268,6 +268,7 @@ module.exports = {
     DNSMessage,
     DNSReader,
     DNSBuilder,
+    Question,
     FLAG,
     RECORD_TYPE,
     QUERY_TYPE,

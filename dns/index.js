@@ -25,12 +25,16 @@ const queryCallbacks = new Map();
 const UDPsocket = dgram.createSocket("udp4");
 
 // message handling logic
-UDPsocket.on("message", data => {
+UDPsocket.on("message", (data, rinfo) => {
+
+    console.log(data, rinfo);
 
     // deserialize message
     const reader = new DNS.DNSReader(data);
     const message = DNS.DNSMessage.read(reader);
-    
+
+    console.log(message);
+
     // try to resolve the matching callback
     const callbacks = queryCallbacks.get(message.id);
     if(callbacks && message.flags.isResponse) {

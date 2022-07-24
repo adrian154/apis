@@ -66,7 +66,7 @@
             <li><code>h</code>: (string, optional) The name of an HTTP header</li>
         </ul>
         <p>
-            <b>Response</b>: If <code>h</code> is provided, the value of header <code>h</code> on the request is returned..
+            <b>Response</b>: If <code>h</code> is provided, the value of header <code>h</code> on the request is returned.
             Otherwise, a JSON object mapping the header names and values on the request is returned.
         </p>
 
@@ -167,6 +167,18 @@
             </ul>
         </p>
         <p>The values in the response are not guaranteed to be sane or correct. This API merely makes a best-effort attempt to correctly deserialize the response sent by the server. Truncated responses will automatically be retried over TCP. If the request could not be completed, a 400 status code is returned. The response value will be a JSON object with a field named <code>error</code> containing a human-readable error.</p>
+
+        <h1 class="endpoint">/dns-query-addrs</h1>
+        <p><b>Methods</b>: GET</p>
+        <p><b>Parameters</b>: </p>
+        <ul>
+            <li><code>name</code>: a <b>fully qualified</b> domain name</li>
+        </ul>
+        <p>
+            <b>Response</b>: a JSON list of IP addresses that have recently queried the DNS server for that name.
+            The built-in DNS server answers all A queries with the IP address of `bithole.dev`.
+            Requester IP addresses are purged from the cache periodically.
+        </p>
 
         <!--
         <h1 class="endpoint"></h1>
